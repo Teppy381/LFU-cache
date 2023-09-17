@@ -185,7 +185,7 @@ public:
     perfect_cache_t(size_t sz) : //constructor
         sz_(sz) {}
 
-    // void analize_request_line();
+    // void analyze_request_line();
     // void set_requests(std::vector<KeyT> request_line);
     // void print_cache() const;
 
@@ -194,7 +194,7 @@ public:
 
 
 
-    void analize_request_line()
+    void analyze_request_line()
     {
         size_t size = REQUEST_LINE.size();
 
