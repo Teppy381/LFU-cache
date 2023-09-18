@@ -109,48 +109,37 @@ int LFU_cache_test(std::vector<int> temp_line, bool human_mode)
 
     caches::LFU_cache_t<int> my_cache {cache_size};
 
-    if (human_mode)
-    {
-        std::cout << "\e[?25l"; // hide cursor
-        std::cout << "\nLFU cache:\n";
-    }
     for (int i = 0; i < n; ++i)
     {
+        if (human_mode)
+        {
+            printf("Asking for key %i\n", temp_line[i]);
+        }
+
         if (my_cache.lookup_update(temp_line[i], slow_get_page_int))
         {
             hits += 1;
             if (human_mode)
             {
-                // std::cout << "\x1B[92m";
+                std::cout << "\e[92m";
             }
         }
         else
         {
             if (human_mode)
             {
-                // std::cout << "\x1B[91m";
+                std::cout << "\e[91m";
             }
         }
-        my_cache.frequency_increase(temp_line[i]);
-
         if (human_mode)
         {
-            // my_cache.print_cache();
-            // std::cout << "\x1B[0m";
-            update_progress_bar(i, n);
+            my_cache.print_cache();
+            std::cout << "\e[m";
+            my_cache.print_hist();
+            my_cache.print_freq_list();
         }
     }
-    if (human_mode)
-    {
-        std::cout << "\e[2K\r"; // clear line
-        std::cout << "hits: " << hits << "/" << n << "\n";
-        std::cout << "\e[?25h"; // reveal cursor
-        // my_cache.print_hist();
-    }
-    else
-    {
-        std::cout << "\nLFU cache hits: " << hits << "/" << n << "\n";
-    }
+    printf("LFU hits: %i\n", hits);
     return hits;
 }
 
@@ -172,9 +161,11 @@ int main(int argc, char* argv[])
 
     std::vector<int> temp_line = read_data();
 
+
+
     LFU_cache_test(temp_line, human_mode);
 
-    perfect_cache_test(temp_line, human_mode);
+    // perfect_cache_test(temp_line, human_mode);
 
     return 0;
 }
