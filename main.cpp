@@ -8,8 +8,12 @@ int slow_get_page_int(int key) { return key; }
 
 void update_progress_bar(int i, int n)
 {
-    float percentage = i * 100/ n;
-    std::cout << "\rProgress: " << i << "/" << n << " (" << percentage << "%)";
+    int period = n / 100;
+    if (i % period == 0)
+    {
+        std::cout << "\rProgress: " << i << "/" << n << " (" << i * 100/ n << "%)";
+    }
+    return;
 }
 
 std::vector<int> read_data()
@@ -38,7 +42,7 @@ std::vector<int> read_data()
     return temp_line;
 }
 
-int perfect_cache_test(std::vector<int> temp_line, bool human_mode)
+int perfect_cache_test(std::vector<int> temp_line, bool verbal, bool interactive)
 {
     int hits = 0;
 
@@ -47,58 +51,64 @@ int perfect_cache_test(std::vector<int> temp_line, bool human_mode)
     size_t cache_size = temp_line.back();
     temp_line.pop_back();
 
-    // std::cout << "n = " << n << ", cache_size = " << cache_size << "\n";
-    // caches::print_container(temp_line);
-
     caches::perfect_cache_t<int> my_cache {cache_size};
 
     my_cache.set_requests(temp_line);
     my_cache.analyze_request_line();
 
-    if (human_mode)
+    std::cout << "\n";
+
+    if (interactive)
     {
         std::cout << "\e[?25l"; // hide cursor
-        std::cout << "\nPerfect cache:\n";
     }
     for (int i = 0; i < n; ++i)
     {
+        if (verbal)
+        {
+            std::cout << "\nAsking for key " << temp_line[i] << "\n";
+        }
+
         if (my_cache.lookup_update(slow_get_page_int, i))
         {
             hits += 1;
-            if (human_mode)
+            if (verbal)
             {
-                // std::cout << "\x1B[92m";
+                std::cout << "\x1B[92m";
+                std::cout << "HIT\n";
             }
         }
         else
         {
-            if (human_mode)
+            if (verbal)
             {
-                // std::cout << "\x1B[91m";
+                std::cout << "\x1B[91m";
+                std::cout << "MISS\n";
             }
         }
 
-        if (human_mode)
+        if (verbal)
         {
-            // my_cache.print_cache();
-            // std::cout << "\x1B[0m";
+            my_cache.print_cache();
+            std::cout << "\x1B[0m";
+            my_cache.print_call_table();
+        }
+        if (interactive)
+        {
             update_progress_bar(i, n);
         }
     }
-    if (human_mode)
+    if (interactive)
     {
         std::cout << "\e[2K\r"; // clear line
-        std::cout << "hits: " << hits << "/" << n << "\n";
         std::cout << "\e[?25h"; // reveal cursor
     }
-    else
-    {
-        std::cout << "\nPerfect cache hits: " << hits << "/" << n << "\n";
-    }
+
+    std::cout << "Perfect cache hits: " << hits << "/" << n << " (" << hits*100/n << "%)" << "\n";
     return hits;
 }
 
-int LFU_cache_test(std::vector<int> temp_line, bool human_mode)
+int LFU_cache_test(std::vector<int> temp_line, bool verbal, bool interactive)
 {
     int hits = 0;
 
@@ -109,72 +119,72 @@ int LFU_cache_test(std::vector<int> temp_line, bool human_mode)
 
     caches::LFU_cache_t<int> my_cache {cache_size};
 
-    if (human_mode)
-    {
-        std::cout << "\e[?25l"; // hide cursor
-        std::cout << "\nLFU cache:\n";
-    }
     for (int i = 0; i < n; ++i)
     {
+        if (verbal)
+        {
+            std::cout << "\nAsking for key " << temp_line[i] << "\n";
+        }
+
         if (my_cache.lookup_update(temp_line[i], slow_get_page_int))
         {
             hits += 1;
-            if (human_mode)
+            if (verbal)
             {
-                // std::cout << "\x1B[92m";
+                std::cout << "\e[92m";
+                std::cout << "HIT\n";
             }
         }
         else
         {
-            if (human_mode)
+            if (verbal)
             {
-                // std::cout << "\x1B[91m";
+                std::cout << "\e[91m";
+                std::cout << "MISS\n";
             }
         }
-        my_cache.frequency_increase(temp_line[i]);
-
-        if (human_mode)
+        if (verbal)
         {
-            // my_cache.print_cache();
-            // std::cout << "\x1B[0m";
-            update_progress_bar(i, n);
+            my_cache.print_cache();
+            std::cout << "\e[0m";
+            my_cache.print_hist();
         }
     }
-    if (human_mode)
-    {
-        std::cout << "\e[2K\r"; // clear line
-        std::cout << "hits: " << hits << "/" << n << "\n";
-        std::cout << "\e[?25h"; // reveal cursor
-        // my_cache.print_hist();
-    }
-    else
-    {
-        std::cout << "\nLFU cache hits: " << hits << "/" << n << "\n";
-    }
+    std::cout << "\nLFU cache hits: " << hits << "/" << n << " (" << hits*100/n << "%)" << "\n";
     return hits;
 }
 
 int main(int argc, char* argv[])
 {
-    bool human_mode = false;
-    if (argc > 1)
+    bool verbal = false;
+    bool interactive = false;
+
+    for (int i = 1; i < argc; ++i)
     {
-        if ((argv[1][0] == '-') && (argv[1][1] == 'H')) // "-H" flag
+        if ((argv[i][0] == '-') && (argv[i][1] == 'V') && (argv[i][2] == '\0'))
+        // "-V" flag (verbal, with dump of structures)
         {
-            human_mode = true;
+            verbal = true;
+        }
+        else if ((argv[i][0] == '-') && (argv[i][1] == 'I') && (argv[i][2] == '\0'))
+        // "-I" flag (interactive, with progress bar)
+        {
+            interactive = true;
         }
         else
         {
-            std::cout << "Unknown flag (use -H for \"human mode\")\n";
+            std::cout << "Unknown flag \"" << argv[i] << "\"\n(use -V or -I)\n";
             return 0;
         }
     }
 
     std::vector<int> temp_line = read_data();
 
-    LFU_cache_test(temp_line, human_mode);
 
-    perfect_cache_test(temp_line, human_mode);
+
+    LFU_cache_test(temp_line, verbal, interactive);
+
+    perfect_cache_test(temp_line, verbal, interactive);
 
     return 0;
 }

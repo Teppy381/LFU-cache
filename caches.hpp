@@ -17,30 +17,32 @@ inline void print_container(const Container &container)
     }
     std::cout << "\n";
 }
-//
-// template <typename Container>
-// void print_map(const Container &container)
-// {
-//     for (const auto &v : container)
-//     {
-//         std::cout << v.first << ": ";
-//         print_container(v.second);
-//     }
-// }
+
+template <typename Container>
+void print_map(const Container &container)
+{
+    for (const auto &v : container)
+    {
+        std::cout << v.first << ": ";
+        print_container(v.second);
+    }
+}
 
 
 template <typename T, typename KeyT = int>
-class LFU_cache_t   // struct is same as class but all its fields are public
+class LFU_cache_t
 {
 private:
     size_t sz_;
     std::unordered_map<KeyT, size_t> HIST;
-    std::list<std::pair<KeyT, T>> CACHE;
+    std::unordered_map<size_t, std::list<KeyT>> FREQUENCY_LIST;
 
-    using ListIt = typename std::list<std::pair<KeyT, T>>::iterator;
+    using FreqIt = typename std::list<KeyT>::iterator;
+    std::list<std::tuple<KeyT, T, FreqIt>> CACHE;
+
+    using ListIt = typename std::list<std::tuple<KeyT, T, FreqIt>>::iterator;
     std::unordered_map<KeyT, ListIt> HASH;
 
-    // size_t frequency_lookup(KeyT key);
     // auto determine_victim(size_t given_frequency) const;
     // bool is_full() const;
 
@@ -50,54 +52,37 @@ public:
 
     // void print_cache() const;
     // void print_hist()  const;
-    // void frequency_increase(KeyT key);
 
     // template <typename F>
     // bool lookup_update(KeyT key, F slow_get_page);
 
 
-    size_t frequency_lookup(KeyT key)
+    ListIt determine_victim(size_t given_frequency) // if returns cache_.end() then there is no victim
     {
-        auto got = HIST.find(key);
-        if (got == HIST.end()) // not found
+        if (given_frequency == 0)
         {
-            HIST.emplace(key, 0);
-            return 0;
+            return CACHE.end();
         }
-        // found
-        return got->second;
-    }
 
-    auto determine_victim(size_t given_frequency) const // if returns cache_.end() then there is no victim
-    {
-        auto victim = CACHE.end();
-        size_t min_frequency = given_frequency;
-
-        auto i = CACHE.begin();
-        while (i != CACHE.end())
+        size_t i = 1;
+        while (FREQUENCY_LIST.find(i) == 0 || FREQUENCY_LIST.at(i).empty())
         {
-            KeyT key = i->first;
-            if (HIST.at(key) <= min_frequency)
+            if (i >= given_frequency)
             {
-                victim = i;
-                min_frequency = HIST.at(key);
+                return CACHE.end();
             }
             ++i;
         }
-        return victim;
-    }
 
-
-    void frequency_increase(KeyT key)
-    {
-        auto got = HIST.find(key);
-        if (got == HIST.end()) // not found
+        if (i > given_frequency)
         {
-            HIST.emplace(key, 1);
-            return;
+            return CACHE.end();
         }
-        got->second += 1;
-        return;
+
+        KeyT key = FREQUENCY_LIST.at(i).front();
+
+        assert(HASH.find(key) != 0);
+        return HASH.at(key);
     }
 
 
@@ -111,7 +96,7 @@ public:
         std::cout << "CACHE:\n";
         for (auto& i: CACHE)
         {
-            std::cout << i.first << " ";
+            std::cout << std::get<0>(i) << " ";
         }
         std::cout << "\n";
         return;
@@ -124,42 +109,82 @@ public:
         {
             std::cout << '{' << i.first << ", " << i.second << "}\n";
         }
+        return;
+    }
+
+    void print_freq_list() const
+    {
+        std::cout << "FREQUENCY_LIST:\n";
+        print_map(FREQUENCY_LIST);
         std::cout << "\n";
         return;
     }
 
-
     template <typename F>
     bool lookup_update(KeyT key, F slow_get_page)
     {
-        auto page = HASH.find(key);
-
-        if (page != HASH.end()) // found
+        if (HIST.count(key) == 0) // add to HIST
         {
+            HIST.emplace(key, 0);
+        }
+
+        if (HASH.count(key) != 0) // found
+        {
+            size_t freq = HIST[key];
+            HIST[key] += 1; // increase frequency
+
+            auto iterator = std::get<2>(*HASH[key]);
+            FREQUENCY_LIST[freq].erase(iterator);
+
+            if (FREQUENCY_LIST.count(freq + 1) == 0)
+            {
+                std::list<KeyT> temp_list;
+                FREQUENCY_LIST.emplace(freq + 1, temp_list);
+            }
+            FREQUENCY_LIST[freq + 1].emplace_front(key);
+
+            std::get<2>(*HASH[key]) = FREQUENCY_LIST[freq + 1].begin();
             return true;
         }
 
-        if (!(is_full())) // there is free space
+
+        size_t freq = HIST[key];
+
+        if (is_full()) // gotta find the victim
         {
-            CACHE.emplace_front(key, slow_get_page(key));
-            HASH.emplace(key, CACHE.begin());
-            return false;
+            auto victim = determine_victim(freq);
+            if (victim == CACHE.end()) // each page in the cache is more valuable than a new page
+            {
+                HIST[key] += 1; // increase frequency
+                return false;
+            }
+
+            // erase victim from CACHE and from FREQUENCY_LIST
+
+            // std::cout << "victim: " << std::get<0>(*victim) << "\n";
+
+
+            KeyT victim_key = std::get<0>(*victim);
+            size_t victim_freq = HIST[victim_key];
+            auto iterator = std::get<2>(*victim);
+            FREQUENCY_LIST[victim_freq].erase(iterator);
+            HASH.erase(victim_key);
+            CACHE.erase(victim);
         }
+        // now there is free space
 
-        // else (gotta find the victim)
+        // increase frequency and add new page to FREQUENCY_LIST[freq + 1] and to CACHE
+        HIST[key] += 1;
 
-        size_t page_frequency = frequency_lookup(key);
-
-        auto victim = determine_victim(page_frequency);
-        if (victim == CACHE.end()) // each page in the cache is more valuable than a new page
+        if (FREQUENCY_LIST.count(freq + 1) == 0)
         {
-            return false;
+            std::list<KeyT> temp_list;
+            FREQUENCY_LIST.emplace(freq + 1, temp_list);
         }
+        FREQUENCY_LIST[freq + 1].emplace_front(key);
 
-        CACHE.erase(victim);
-        CACHE.emplace_front(key, slow_get_page(key));
+        CACHE.emplace_front(key, slow_get_page(key), FREQUENCY_LIST[freq + 1].begin());
         HASH.emplace(key, CACHE.begin());
-
         return false;
     }
 }; // end of LFU_cache_t
@@ -221,7 +246,7 @@ public:
 
         assert(CALL_TABLE.count(new_key) != 0);
 
-        if (CALL_TABLE[new_key].empty()) // no more mention of this key
+        if (CALL_TABLE[new_key].size() <= 1) // no more mention of this key
         {
             return victim;
         }
@@ -272,7 +297,11 @@ public:
         return;
     }
 
-
+    void print_call_table() const
+    {
+        print_map(CALL_TABLE);
+        return;
+    }
 
     template <typename F>
     bool lookup_update(F slow_get_page, int i)
@@ -306,6 +335,8 @@ public:
             return false;
         }
 
+        KeyT victim_key = victim->first;
+        HASH.erase(victim_key);
         CACHE.erase(victim);
         CACHE.emplace_front(key, slow_get_page(key));
         HASH.emplace(key, CACHE.begin());
