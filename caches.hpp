@@ -30,7 +30,7 @@ void print_map(const Container &container)
 
 
 template <typename T, typename KeyT = int>
-class LFU_cache_t   // struct is same as class but all its fields are public
+class LFU_cache_t
 {
 private:
     size_t sz_;
@@ -57,18 +57,6 @@ public:
     // bool lookup_update(KeyT key, F slow_get_page);
 
 
-    size_t frequency_lookup(KeyT key)
-    {
-        auto got = HIST.find(key);
-        if (got == HIST.end()) // not found
-        {
-            HIST.emplace(key, 0);
-            return 0;
-        }
-        // found
-        return got->second;
-    }
-
     ListIt determine_victim(size_t given_frequency) // if returns cache_.end() then there is no victim
     {
         if (given_frequency == 0)
@@ -86,7 +74,7 @@ public:
             ++i;
         }
 
-        if (i >= given_frequency)
+        if (i > given_frequency)
         {
             return CACHE.end();
         }
@@ -95,19 +83,6 @@ public:
 
         assert(HASH.find(key) != 0);
         return HASH.at(key);
-    }
-
-
-    void frequency_increase(KeyT key)
-    {
-        auto got = HIST.find(key);
-        if (got == HIST.end()) // not found
-        {
-            HIST.emplace(key, 1);
-            return;
-        }
-        got->second += 1;
-        return;
     }
 
 
@@ -271,7 +246,7 @@ public:
 
         assert(CALL_TABLE.count(new_key) != 0);
 
-        if (CALL_TABLE[new_key].empty()) // no more mention of this key
+        if (CALL_TABLE[new_key].size() <= 1) // no more mention of this key
         {
             return victim;
         }
@@ -322,7 +297,11 @@ public:
         return;
     }
 
-
+    void print_call_table() const
+    {
+        print_map(CALL_TABLE);
+        return;
+    }
 
     template <typename F>
     bool lookup_update(F slow_get_page, int i)
@@ -356,6 +335,8 @@ public:
             return false;
         }
 
+        KeyT victim_key = victim->first;
+        HASH.erase(victim_key);
         CACHE.erase(victim);
         CACHE.emplace_front(key, slow_get_page(key));
         HASH.emplace(key, CACHE.begin());
