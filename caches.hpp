@@ -196,6 +196,7 @@ class perfect_cache_t
 private:
     size_t sz_;
     std::vector<KeyT> REQUEST_LINE;
+
     std::list<std::pair<KeyT, T>> CACHE;
 
     using ListIt = typename std::list<std::pair<KeyT, T>>::iterator;
@@ -246,12 +247,12 @@ public:
 
         assert(CALL_TABLE.count(new_key) != 0);
 
-        if (CALL_TABLE[new_key].size() <= 1) // no more mention of this key
+        if (CALL_TABLE[new_key].size() <= 1) // no more mentions of new_key
         {
             return victim;
         }
-        size_t farthest_request = CALL_TABLE[new_key].front();
 
+        size_t farthest_request = CALL_TABLE[new_key].front();
 
         for (auto i = CACHE.begin(); i != CACHE.end(); ++i)
         {
@@ -259,7 +260,7 @@ public:
 
             assert(CALL_TABLE.count(key) != 0);
 
-            if (CALL_TABLE[key].empty()) // no more mention of this key
+            if (CALL_TABLE[key].empty()) // no more mentions of key
             {
                 return i;
             }
@@ -316,28 +317,23 @@ public:
             return true;
         }
 
-        if (!(is_full())) // there is free space
+        if (is_full()) // gotta find the victim
         {
-            CACHE.emplace_front(key, slow_get_page(key));
-            HASH.emplace(key, CACHE.begin());
+            auto victim = determine_victim(key, i);
+            // print_map(CALL_TABLE);
+            if (victim == CACHE.end()) // each page in the cache is more valuable than a new page
+            {
+                // printf("each page in the cache is more valuable than a new page\n");
+                CALL_TABLE[key].pop_front();
+                return false;
+            }
 
-            CALL_TABLE[key].pop_front();
-            return false;
+            KeyT victim_key = victim->first;
+            HASH.erase(victim_key);
+            CACHE.erase(victim);
+
         }
-
-        // else (gotta find the victim)
-        auto victim = determine_victim(key, i);
-        // print_map(CALL_TABLE);
-        if (victim == CACHE.end()) // each page in the cache is more valuable than a new page
-        {
-            // printf("each page in the cache is more valuable than a new page\n");
-            CALL_TABLE[key].pop_front();
-            return false;
-        }
-
-        KeyT victim_key = victim->first;
-        HASH.erase(victim_key);
-        CACHE.erase(victim);
+        // now there is free space
         CACHE.emplace_front(key, slow_get_page(key));
         HASH.emplace(key, CACHE.begin());
 
