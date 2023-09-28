@@ -5,6 +5,7 @@
 #include <list>
 #include <unordered_map>
 #include <vector>
+#include <set>
 
 namespace caches
 {
@@ -190,16 +191,35 @@ public:
 }; // end of LFU_cache_t
 
 
+template <typename T, typename KeyT>
+struct perfect_cache_cell
+{
+    T data;
+    KeyT key;
+    size_t next_call;
+};
+
+
+template <typename T, typename KeyT>
+struct cell_compare
+{
+    bool operator() (const perfect_cache_cell<T, KeyT> &lhs, const perfect_cache_cell<T, KeyT> &rhs) const
+    {
+        return (lhs.next_call > rhs.next_call);
+    }
+};
+
 template <typename T, typename KeyT = int>
 class perfect_cache_t
 {
 private:
     size_t sz_;
     std::vector<KeyT> REQUEST_LINE;
-    std::list<std::pair<KeyT, T>> CACHE;
 
-    using ListIt = typename std::list<std::pair<KeyT, T>>::iterator;
-    std::unordered_map<KeyT, ListIt> HASH;
+    std::set<perfect_cache_cell<T, KeyT>, cell_compare<T, KeyT>> CACHE;
+
+    using CacheIt = typename std::set<perfect_cache_cell<T, KeyT>, cell_compare<T, KeyT>>::iterator;
+    std::unordered_map<KeyT, CacheIt> HASH;
 
     std::unordered_map<KeyT, std::list<size_t>> CALL_TABLE;
 
@@ -240,38 +260,20 @@ public:
         return;
     }
 
-    auto determine_victim(KeyT new_key, int i_0) // if returns cache_.end() then there is no victim
+    CacheIt determine_victim(KeyT new_key) // if returns cache_.end() then there is no victim
     {
-        auto victim = CACHE.end();
-
         assert(CALL_TABLE.count(new_key) != 0);
 
-        if (CALL_TABLE[new_key].size() <= 1) // no more mention of this key
+        if (CALL_TABLE[new_key].size() <= 1) // no more mentions of new_key
         {
-            return victim;
+            return CACHE.end();
         }
-        size_t farthest_request = CALL_TABLE[new_key].front();
-
-
-        for (auto i = CACHE.begin(); i != CACHE.end(); ++i)
+        if (*(CALL_TABLE[new_key].begin()) > CACHE.begin()->next_call)
         {
-            KeyT key = i->first;
-
-            assert(CALL_TABLE.count(key) != 0);
-
-            if (CALL_TABLE[key].empty()) // no more mention of this key
-            {
-                return i;
-            }
-            size_t next_request = CALL_TABLE[key].front();
-            // std::cout << "key: " << key << " next_request: " << next_request << "\n";
-            if (next_request >= farthest_request)
-            {
-                victim = i;
-                farthest_request = next_request;
-            }
+            return CACHE.end();
         }
-        return victim;
+
+        return CACHE.begin();
     }
 
 
@@ -291,7 +293,19 @@ public:
         std::cout << "CACHE:\n";
         for (auto& i: CACHE)
         {
+            std::cout << i.key << " " << i.next_call << "\n";
+        }
+        std::cout << "\n";
+        return;
+    }
+
+    void print_hash() const
+    {
+        std::cout << "HASH:\n";
+        for (auto& i: HASH)
+        {
             std::cout << i.first << " ";
+            printf("%p\n", i.second);
         }
         std::cout << "\n";
         return;
@@ -299,6 +313,7 @@ public:
 
     void print_call_table() const
     {
+        std::cout << "CALL_TABLE:\n";
         print_map(CALL_TABLE);
         return;
     }
@@ -306,6 +321,7 @@ public:
     template <typename F>
     bool lookup_update(F slow_get_page, int i)
     {
+        assert(HASH.size() == CACHE.size());
         KeyT key = REQUEST_LINE[i];
 
         auto page = HASH.find(key);
@@ -313,35 +329,67 @@ public:
         if (page != HASH.end()) // found
         {
             CALL_TABLE[key].pop_front();
+
+            if (CALL_TABLE[key].size() == 0)
+            {
+                CACHE.erase(page->second);
+                HASH.erase(page);
+                return true;
+            }
+
+            T data_buffer = HASH[key]->data;
+
+            CACHE.erase(page->second);
+            HASH.erase(page);
+
+            assert(CALL_TABLE[key].size() != 0);
+
+            perfect_cache_cell<T, KeyT> temp_cell;
+            temp_cell.key = key;
+            temp_cell.data = data_buffer;
+            temp_cell.next_call = *(CALL_TABLE[key].begin());
+
+            auto emplace_log = CACHE.emplace(temp_cell);
+            assert(emplace_log.second == true);
+
+            HASH.emplace(key, emplace_log.first);
             return true;
         }
 
-        if (!(is_full())) // there is free space
+        if (CALL_TABLE[key].size() == 1) // this element won't appear later
         {
-            CACHE.emplace_front(key, slow_get_page(key));
-            HASH.emplace(key, CACHE.begin());
-
             CALL_TABLE[key].pop_front();
             return false;
         }
 
-        // else (gotta find the victim)
-        auto victim = determine_victim(key, i);
-        // print_map(CALL_TABLE);
-        if (victim == CACHE.end()) // each page in the cache is more valuable than a new page
+        if (is_full()) // gotta find the victim
         {
-            // printf("each page in the cache is more valuable than a new page\n");
-            CALL_TABLE[key].pop_front();
-            return false;
+            auto victim = determine_victim(key);
+            // print_map(CALL_TABLE);
+            if (victim == CACHE.end()) // each page in the cache is more valuable than a new page
+            {
+                // printf("each page in the cache is more valuable than a new page\n");
+                CALL_TABLE[key].pop_front();
+                return false;
+            }
+
+            KeyT victim_key = victim->key;
+            HASH.erase(victim_key);
+            CACHE.erase(victim);
         }
-
-        KeyT victim_key = victim->first;
-        HASH.erase(victim_key);
-        CACHE.erase(victim);
-        CACHE.emplace_front(key, slow_get_page(key));
-        HASH.emplace(key, CACHE.begin());
-
+        // now there is free space
         CALL_TABLE[key].pop_front();
+
+        perfect_cache_cell<T, KeyT> temp_cell;
+        temp_cell.key = key;
+        temp_cell.data = slow_get_page(key);
+        temp_cell.next_call = *(CALL_TABLE[key].begin());
+
+        auto emplace_log = CACHE.emplace(temp_cell);
+        assert(emplace_log.second == true);
+
+        HASH.emplace(key, emplace_log.first);
+
         return false;
     }
 }; // end of perfect_cache_t

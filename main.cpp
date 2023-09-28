@@ -11,19 +11,24 @@ void update_progress_bar(int i, int n)
     int period = n / 100;
     if (i % period == 0)
     {
-        std::cout << "\rProgress: " << i << "/" << n << " (" << i * 100/ n << "%)";
+        std::cout << "\rProgress: " << i * 100/ n << "%";
     }
     return;
 }
 
 std::vector<int> read_data()
 {
-    // std::cout << "Enter the data:\n";
+    std::cout << "Reading the data\n";
+
     int n;
     size_t cache_size;
 
     std::cin >> cache_size >> n;
-    assert(std::cin.good());
+    if (!(std::cin.good()))
+    {
+        std::cout << "Unable to read cache size or sequence length\n";
+        exit(1);
+    }
 
     std::vector<int> temp_line;
 
@@ -31,7 +36,15 @@ std::vector<int> read_data()
     {
         int page_id;
         std::cin >> page_id;
-        assert(std::cin.good());
+        if (!(std::cin.good()))
+        {
+            std::cout << "Unable to read page id that goes " << i + 1 << "th in the sequence\n";
+            if (temp_line.size() != 0)
+            {
+                std::cout << "(the id of the last page read is " << temp_line.back() << ")\n";
+            }
+            exit(1);
+        }
 
         temp_line.emplace_back(page_id);
     }
@@ -91,7 +104,8 @@ int perfect_cache_test(std::vector<int> temp_line, bool verbal, bool interactive
         {
             my_cache.print_cache();
             std::cout << "\x1B[0m";
-            my_cache.print_call_table();
+            my_cache.print_hash();
+            // my_cache.print_call_table();
         }
         if (interactive)
         {
@@ -167,7 +181,7 @@ int main(int argc, char* argv[])
             verbal = true;
         }
         else if ((argv[i][0] == '-') && (argv[i][1] == 'I') && (argv[i][2] == '\0'))
-        // "-I" flag (interactive, with progress bar)
+        // "-I" flag (interactive, with progress bar, seems to work only in windows cmd)
         {
             interactive = true;
         }
