@@ -6,7 +6,7 @@
 // slow get page imitation
 int slow_get_page_int(int key) { return key; }
 
-void update_progress_bar(int i, int n)
+void update_progress_bar(size_t i, size_t n)
 {
     int period = n / 100;
     if (i % period == 0)
@@ -16,7 +16,7 @@ void update_progress_bar(int i, int n)
     return;
 }
 
-std::vector<int> read_data()
+std::vector<size_t> read_data()
 {
     std::cout << "Reading the data\n";
 
@@ -30,7 +30,7 @@ std::vector<int> read_data()
         exit(1);
     }
 
-    std::vector<int> temp_line;
+    std::vector<size_t> temp_line;
 
     for (int i = 0; i < n; ++i)
     {
@@ -55,7 +55,7 @@ std::vector<int> read_data()
     return temp_line;
 }
 
-int perfect_cache_test(std::vector<int> temp_line, bool verbal, bool interactive)
+int perfect_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
 {
     int hits = 0;
 
@@ -64,7 +64,7 @@ int perfect_cache_test(std::vector<int> temp_line, bool verbal, bool interactive
     size_t cache_size = temp_line.back();
     temp_line.pop_back();
 
-    caches::perfect_cache_t<int> my_cache {cache_size};
+    caches::perfect_cache_t<int, size_t> my_cache {cache_size};
 
     my_cache.set_requests(temp_line);
     my_cache.analyze_request_line();
@@ -75,7 +75,7 @@ int perfect_cache_test(std::vector<int> temp_line, bool verbal, bool interactive
     {
         std::cout << "\e[?25l"; // hide cursor
     }
-    for (int i = 0; i < n; ++i)
+    for (size_t i = 0; i < n; ++i)
     {
         if (verbal)
         {
@@ -122,7 +122,7 @@ int perfect_cache_test(std::vector<int> temp_line, bool verbal, bool interactive
     return hits;
 }
 
-int LFU_cache_test(std::vector<int> temp_line, bool verbal, bool interactive)
+int LFU_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
 {
     int hits = 0;
 
@@ -131,9 +131,16 @@ int LFU_cache_test(std::vector<int> temp_line, bool verbal, bool interactive)
     size_t cache_size = temp_line.back();
     temp_line.pop_back();
 
-    caches::LFU_cache_t<int> my_cache {cache_size};
+    caches::LFU_cache_t<int, size_t> my_cache {cache_size};
 
-    for (int i = 0; i < n; ++i)
+    std::cout << "\n";
+
+    if (interactive)
+    {
+        std::cout << "\e[?25l"; // hide cursor
+    }
+
+    for (size_t i = 0; i < n; ++i)
     {
         if (verbal)
         {
@@ -163,7 +170,17 @@ int LFU_cache_test(std::vector<int> temp_line, bool verbal, bool interactive)
             std::cout << "\e[0m";
             my_cache.print_hist();
         }
+        if (interactive)
+        {
+            update_progress_bar(i, n);
+        }
     }
+    if (interactive)
+    {
+        std::cout << "\e[2K\r"; // clear line
+        std::cout << "\e[?25h"; // reveal cursor
+    }
+
     std::cout << "\nLFU cache hits: " << hits << "/" << n << " (" << hits*100/n << "%)" << "\n";
     return hits;
 }
@@ -192,7 +209,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    std::vector<int> temp_line = read_data();
+    std::vector<size_t> temp_line = read_data();
 
 
 
