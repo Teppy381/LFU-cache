@@ -66,7 +66,7 @@ public:
         }
 
         size_t i = 1;
-        while (FREQUENCY_LIST.find(i) == 0 || FREQUENCY_LIST.at(i).empty())
+        while (FREQUENCY_LIST.count(i) == 0 || FREQUENCY_LIST.at(i).empty())
         {
             if (i >= given_frequency)
             {
@@ -82,7 +82,7 @@ public:
 
         KeyT key = FREQUENCY_LIST.at(i).front();
 
-        assert(HASH.find(key) != 0);
+        assert(HASH.count(key) != 0);
         return HASH.at(key);
     }
 
@@ -319,7 +319,7 @@ public:
     }
 
     template <typename F>
-    bool lookup_update(F slow_get_page, int i)
+    bool lookup_update(F slow_get_page, size_t i)
     {
         assert(HASH.size() == CACHE.size());
         KeyT key = REQUEST_LINE[i];
