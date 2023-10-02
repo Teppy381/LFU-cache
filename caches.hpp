@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <iostream>
 #include <iterator>
 #include <list>
@@ -34,7 +35,10 @@ template <typename T, typename KeyT = int>
 class LFU_cache_t
 {
 private:
-    size_t sz_;
+    size_t size_;
+    size_t hist_max_size_;
+    const float hist_clean_mult_ = 0.4;
+
     std::unordered_map<KeyT, size_t> HIST;
     std::unordered_map<size_t, std::list<KeyT>> FREQUENCY_LIST;
 
@@ -49,7 +53,7 @@ private:
 
 public:
     LFU_cache_t(size_t sz) : //constructor
-        sz_(sz) {}
+        size_(sz) { hist_max_size_ = sz * 5; }
 
     // void print_cache() const;
     // void print_hist()  const;
@@ -86,10 +90,40 @@ public:
         return HASH.at(key);
     }
 
+    void clean_HIST()
+    {
+        using HistIt = typename std::unordered_map<KeyT, size_t>::iterator;
+        std::vector<HistIt> to_erase_list;
+
+        size_t target_size = hist_max_size_ * hist_clean_mult_;
+
+        assert(target_size >= size_);
+        while (HIST.size() > target_size)
+        {
+            for (auto i = HIST.begin(); i != HIST.end(); ++i)
+            {
+                if ((i->second <= 1) && (HASH.count(i->first) == 0))
+                {
+                    to_erase_list.push_back(i);
+                }
+                else
+                {
+                    i->second -= 1;
+                }
+            }
+            while (to_erase_list.size() > 0)
+            {
+                HIST.erase(to_erase_list.back());
+                to_erase_list.pop_back();
+            }
+        }
+        // std::cout << "clean_HIST called\n";
+    }
+
 
     bool is_full() const
     {
-        return (CACHE.size() == sz_);
+        return (CACHE.size() == size_);
     }
 
     void print_cache() const
@@ -101,6 +135,11 @@ public:
         }
         std::cout << "\n";
         return;
+    }
+
+    void print_hist_size() const
+    {
+        std::cout << "HIST size = " << HIST.size() << "\n";
     }
 
     void print_hist() const
@@ -124,6 +163,11 @@ public:
     template <typename F>
     bool lookup_update(KeyT key, F slow_get_page)
     {
+        if (HIST.size() > hist_max_size_)
+        {
+            clean_HIST();
+        }
+
         if (HIST.count(key) == 0) // add to HIST
         {
             HIST.emplace(key, 0);
@@ -213,7 +257,7 @@ template <typename T, typename KeyT = int>
 class perfect_cache_t
 {
 private:
-    size_t sz_;
+    size_t size_;
     std::vector<KeyT> REQUEST_LINE;
 
     std::set<perfect_cache_cell<T, KeyT>, cell_compare<T, KeyT>> CACHE;
@@ -228,7 +272,7 @@ private:
 
 public:
     perfect_cache_t(size_t sz) : //constructor
-        sz_(sz) {}
+        size_(sz) {}
 
     // void analyze_request_line();
     // void set_requests(std::vector<KeyT> request_line);
@@ -285,7 +329,7 @@ public:
 
     bool is_full() const
     {
-        return (CACHE.size() == sz_);
+        return (CACHE.size() == size_);
     }
 
     void print_cache() const
@@ -304,8 +348,9 @@ public:
         std::cout << "HASH:\n";
         for (auto& i: HASH)
         {
-            std::cout << i.first << " ";
-            printf("%p\n", i.second);
+            std::cout << i.first << " " << &*(i.second) << std::endl;
+            // std::cout << i.second << "\n";
+            // printf("%p\n", i.second); // TODO replace printf with cout
         }
         std::cout << "\n";
         return;

@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "caches.hpp"
+#include "settings_parser.hpp"
 
 // slow get page imitation
 int slow_get_page_int(int key) { return key; }
@@ -55,7 +56,7 @@ std::vector<size_t> read_data()
     return temp_line;
 }
 
-int perfect_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
+int perfect_cache_test(std::vector<size_t> temp_line, const settings_parser::my_settings_t& settings)
 {
     int hits = 0;
 
@@ -71,13 +72,13 @@ int perfect_cache_test(std::vector<size_t> temp_line, bool verbal, bool interact
 
     std::cout << "\n";
 
-    if (interactive)
+    if (settings.progress_bar)
     {
         std::cout << "\e[?25l"; // hide cursor
     }
     for (size_t i = 0; i < n; ++i)
     {
-        if (verbal)
+        if (settings.verbose)
         {
             std::cout << "\nAsking for key " << temp_line[i] << "\n";
         }
@@ -85,7 +86,7 @@ int perfect_cache_test(std::vector<size_t> temp_line, bool verbal, bool interact
         if (my_cache.lookup_update(slow_get_page_int, i))
         {
             hits += 1;
-            if (verbal)
+            if (settings.verbose)
             {
                 std::cout << "\x1B[92m";
                 std::cout << "HIT\n";
@@ -93,26 +94,26 @@ int perfect_cache_test(std::vector<size_t> temp_line, bool verbal, bool interact
         }
         else
         {
-            if (verbal)
+            if (settings.verbose)
             {
                 std::cout << "\x1B[91m";
                 std::cout << "MISS\n";
             }
         }
 
-        if (verbal)
+        if (settings.verbose)
         {
             my_cache.print_cache();
             std::cout << "\x1B[0m";
             my_cache.print_hash();
             // my_cache.print_call_table();
         }
-        if (interactive)
+        if (settings.progress_bar)
         {
             update_progress_bar(i, n);
         }
     }
-    if (interactive)
+    if (settings.progress_bar)
     {
         std::cout << "\e[2K\r"; // clear line
         std::cout << "\e[?25h"; // reveal cursor
@@ -122,7 +123,7 @@ int perfect_cache_test(std::vector<size_t> temp_line, bool verbal, bool interact
     return hits;
 }
 
-int LFU_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
+int LFU_cache_test(std::vector<size_t> temp_line, const settings_parser::my_settings_t& settings)
 {
     int hits = 0;
 
@@ -135,14 +136,14 @@ int LFU_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
 
     std::cout << "\n";
 
-    if (interactive)
+    if (settings.progress_bar)
     {
         std::cout << "\e[?25l"; // hide cursor
     }
 
     for (size_t i = 0; i < n; ++i)
     {
-        if (verbal)
+        if (settings.verbose)
         {
             std::cout << "\nAsking for key " << temp_line[i] << "\n";
         }
@@ -150,7 +151,7 @@ int LFU_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
         if (my_cache.lookup_update(temp_line[i], slow_get_page_int))
         {
             hits += 1;
-            if (verbal)
+            if (settings.verbose)
             {
                 std::cout << "\e[92m";
                 std::cout << "HIT\n";
@@ -158,64 +159,63 @@ int LFU_cache_test(std::vector<size_t> temp_line, bool verbal, bool interactive)
         }
         else
         {
-            if (verbal)
+            if (settings.verbose)
             {
                 std::cout << "\e[91m";
                 std::cout << "MISS\n";
             }
         }
-        if (verbal)
+        if (settings.verbose)
         {
             my_cache.print_cache();
             std::cout << "\e[0m";
-            my_cache.print_hist();
+            my_cache.print_hist_size();
+            // my_cache.print_hist();
+            // my_cache.print_freq_list();
         }
-        if (interactive)
+        if (settings.progress_bar)
         {
             update_progress_bar(i, n);
         }
     }
-    if (interactive)
+    if (settings.progress_bar)
     {
         std::cout << "\e[2K\r"; // clear line
         std::cout << "\e[?25h"; // reveal cursor
     }
 
+//     std::cout << "\e[96m";
+//     my_cache.print_cache();
+//     std::cout << "\e[0m";
+//     my_cache.print_hist_size();
+//     my_cache.print_hist();
+//
+//     my_cache.clean_HIST();
+//
+//     my_cache.print_hist_size();
+//     my_cache.print_hist();
+
     std::cout << "\nLFU cache hits: " << hits << "/" << n << " (" << hits*100/n << "%)" << "\n";
     return hits;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, const char* argv[])
 {
-    bool verbal = false;
-    bool interactive = false;
-
-    for (int i = 1; i < argc; ++i)
-    {
-        if ((argv[i][0] == '-') && (argv[i][1] == 'V') && (argv[i][2] == '\0'))
-        // "-V" flag (verbal, with dump of structures)
-        {
-            verbal = true;
-        }
-        else if ((argv[i][0] == '-') && (argv[i][1] == 'I') && (argv[i][2] == '\0'))
-        // "-I" flag (interactive, with progress bar, seems to work only in windows cmd)
-        {
-            interactive = true;
-        }
-        else
-        {
-            std::cout << "Unknown flag \"" << argv[i] << "\"\n(use -V or -I)\n";
-            return 0;
-        }
-    }
+    settings_parser::my_settings_t settings;
+    settings.parse_settings(argc, argv);
+    // settings.print_settings();
 
     std::vector<size_t> temp_line = read_data();
 
+    if (settings.test_LFU)
+    {
+        LFU_cache_test(temp_line, settings);
+    }
 
-
-    LFU_cache_test(temp_line, verbal, interactive);
-
-    perfect_cache_test(temp_line, verbal, interactive);
+    if (settings.test_perfect)
+    {
+        perfect_cache_test(temp_line, settings);
+    }
 
     return 0;
 }
