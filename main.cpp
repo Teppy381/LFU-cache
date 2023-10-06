@@ -1,7 +1,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "caches.hpp"
+#include "perfect_cache.hpp"
+#include "LFU_cache.hpp"
 #include "settings_parser.hpp"
 
 // slow get page imitation
@@ -184,17 +185,6 @@ int LFU_cache_test(std::vector<size_t> temp_line, const settings_parser::my_sett
         std::cout << "\e[?25h"; // reveal cursor
     }
 
-//     std::cout << "\e[96m";
-//     my_cache.print_cache();
-//     std::cout << "\e[0m";
-//     my_cache.print_hist_size();
-//     my_cache.print_hist();
-//
-//     my_cache.clean_HIST();
-//
-//     my_cache.print_hist_size();
-//     my_cache.print_hist();
-
     std::cout << "\nLFU cache hits: " << hits << "/" << n << " (" << hits*100/n << "%)" << "\n";
     return hits;
 }
@@ -203,7 +193,6 @@ int main(int argc, const char* argv[])
 {
     settings_parser::my_settings_t settings;
     settings.parse_settings(argc, argv);
-    // settings.print_settings();
 
     std::vector<size_t> temp_line = read_data();
 
